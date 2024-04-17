@@ -13,6 +13,7 @@ const dotenv = require("dotenv");
 const { stringToBytes, bytesToHex } = require("viem");
 const bodyParser = require("body-parser");
 const axios = require("axios");
+const abi = require("./EAS.json").abi;
 
 const app = express();
 app.use(bodyParser.json());
@@ -235,9 +236,9 @@ app.post("/delegateAttestationOnchain", async (req, res) => {
       const eas = new EAS(EASContractAddress);
       const signerUser = new ethers.Wallet(process.env.USER_PVT_KEY, provider);
       console.log("thesigner user", signerUser);
-      console.log("thesigner admin: ", signer.provider);
+      console.log("thesigner admin: ", signer);
 
-      eas.connect(signer.provider);
+      eas.connect(signer);
       console.log("connected");
       //   const delegated = new Delegated({
       //     address: EASContractAddress,
@@ -334,6 +335,128 @@ app.post("/registerSchema", async (req, res) => {
     console.error("Error:", error);
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+app.post("/directCall", async (req, res) => {
+  const { recipient, meetingId, meetingType, startTime, endTime } = req.body;
+  if (typeof recipient !== "string" || typeof meetingId !== "string") {
+    return res
+      .status(400)
+      .json({ error: "Recipient and meetingId must be strings." });
+  } else if (
+    typeof meetingType !== "number" ||
+    typeof startTime !== "number" ||
+    typeof endTime !== "number"
+  ) {
+    return res
+      .status(400)
+      .json({ error: "MeetingType, startTime, and endTime must be numbers." });
+  } else if (meetingType < 0 || meetingType > 5) {
+    return res
+      .status(400)
+      .json({ error: "MeetingType must be a number between 0 and 5." });
+  }
+  //data   ----START
+  const schemaEncoder = new SchemaEncoder(
+    "bytes32 MeetingId,uint8 MeetingType,uint32 StartTime,uint32 EndTime"
+  );
+
+  const encodedData = schemaEncoder.encodeData([
+    {
+      name: "MeetingId",
+      value: bytesToHex(stringToBytes(meetingId), { size: 32 }),
+      type: "bytes32",
+    },
+    { name: "MeetingType", value: meetingType, type: "uint8" },
+    { name: "StartTime", value: startTime, type: "uint32" },
+    { name: "EndTime", value: endTime, type: "uint32" },
+  ]);
+  const schemaUID =
+    "0x05c93054d8326438fe4f859f9382540f37677a5c87020037b9ec9554b3daff0f";
+
+  //data   ----END
+
+  const eas = new EAS(EASContractAddress);
+  eas.connect(signer);
+  const signerUser = new ethers.Wallet(process.env.USER_PVT_KEY, provider);
+  const contract = new ethers.Contract(EASContractAddress, abi, signerUser);
+  console.log("the signer user:", signerUser);
+  console.log("the signer admin: ", signer);
+
+  eas.connect(signer);
+  console.log("connected to EAS");
+
+  const delegated = await eas.getDelegated();
+
+  console.log("delegated obj", delegated);
+
+  console.log("siginig attestation...");
+
+  const delegatedAttestation = await delegated.signDelegatedAttestation(
+    {
+      schema: schemaUID,
+      recipient: recipient,
+      expirationTime: NO_EXPIRATION,
+      revocable: false,
+      refUID: ZERO_BYTES32,
+      data: encodedData,
+      value: BigInt(0),
+      deadline: NO_EXPIRATION,
+      nonce: await eas.getNonce(signer.address),
+    },
+    signer
+  );
+  console.log("signed Object:", delegatedAttestation);
+  /* const tupleObject = {
+    schema:
+      "0x05c93054d8326438fe4f859f9382540f37677a5c87020037b9ec9554b3daff0f",
+    data: {
+      recipient: "0x97861976283e6901b407D1e217B72c4007D9F64D",
+      data: "0x7465732d747365662d6768000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000030390000000000000000000000000000000000000000000000000000000000003039",
+      expirationTime: 0n,
+      revocable: false,
+      refUID:
+        "0x0000000000000000000000000000000000000000000000000000000000000000",
+      value: 0n,
+      nonce: await eas.getNonce("0x8dEa0ad941d577e356745d758b30Fa11EFa28E80"),
+    },
+    signature: {
+      v: 27,
+      r: "0xbda8d6621ef8bfc7448b6a807f4c8bc3898ee65cd2d206a5576398d072701f97",
+      s: "0x62f4e3e0737933d79ab3b7a087ef67316f4f46343937efdab323863f7d443d5a",
+    },
+    attester: "0x8dEa0ad941d577e356745d758b30Fa11EFa28E80",
+    deadline: NO_EXPIRATION,
+  }; */
+
+  const tupleObject = {
+    schema: delegatedAttestation.message.schema,
+    data: {
+      recipient: delegatedAttestation.message.recipient,
+      data: delegatedAttestation.message.data,
+      expirationTime: delegatedAttestation.message.expirationTime,
+      revocable: delegatedAttestation.message.revocable,
+      refUID: delegatedAttestation.message.refUID,
+      value: 0n,
+    },
+    signature: {
+      v: delegatedAttestation.signature.v,
+      r: delegatedAttestation.signature.r,
+      s: delegatedAttestation.signature.s,
+    },
+    attester: "0x8dEa0ad941d577e356745d758b30Fa11EFa28E80",
+    deadline: 0n,
+  };
+  console.log("the tuple:", tupleObject);
+
+  console.log("transaction being sent...");
+
+  const tx = await contract.attestByDelegation(tupleObject, {
+    gasLimit: 3000000,
+  });
+  console.log(tx);
+  console.log("transaction sent successfully...");
+  res.json({ success: true, tx });
 });
 
 // Start the server
