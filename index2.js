@@ -235,9 +235,9 @@ app.post("/delegateAttestationOnchain", async (req, res) => {
       const eas = new EAS(EASContractAddress);
       const signerUser = new ethers.Wallet(process.env.USER_PVT_KEY, provider);
       console.log("thesigner user", signerUser);
-      console.log("thesigner admin: ", signer.provider);
+      console.log("thesigner admin: ", signer);
 
-      eas.connect(signer.provider);
+      eas.connect(signer);
       console.log("connected");
       //   const delegated = new Delegated({
       //     address: EASContractAddress,
