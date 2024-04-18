@@ -14,6 +14,7 @@ const { stringToBytes, bytesToHex } = require("viem");
 const bodyParser = require("body-parser");
 const axios = require("axios");
 const abi = require("./EAS.json").abi;
+const resolver_abi = require("./AttesterResolver.json").abi;
 
 const app = express();
 app.use(bodyParser.json());
@@ -230,7 +231,7 @@ app.post("/delegateAttestationOnchain", async (req, res) => {
       { name: "EndTime", value: endTime, type: "uint32" },
     ]);
     const schemaUID =
-      "0x05c93054d8326438fe4f859f9382540f37677a5c87020037b9ec9554b3daff0f";
+      "0x98a9530fb8d7039c36f78e857b55f1c0e2d4caafa00d05dec37f4abef3e301b2";
 
     try {
       const eas = new EAS(EASContractAddress);
@@ -240,20 +241,18 @@ app.post("/delegateAttestationOnchain", async (req, res) => {
 
       eas.connect(signer);
       console.log("connected");
+      //   Use this delegated if you want to go manual
       //   const delegated = new Delegated({
       //     address: EASContractAddress,
       //     chainId: BigInt(11155420),
       //     version: "1.0.2",
       //   });
-      console.log("hi");
       const delegated = await eas.getDelegated();
       console.log(delegated);
 
-      console.log("delegated obj", delegated);
+      console.log("delegated obj: ", delegated);
       console.log("siginig attestation...");
 
-      const zero = BigInt(0);
-      console.log(zero);
       //   console.log("the nonce", await eas.getNonce(signer.address));
       const delegatedAttestation = await delegated.signDelegatedAttestation(
         {
@@ -263,21 +262,18 @@ app.post("/delegateAttestationOnchain", async (req, res) => {
           revocable: false,
           refUID: ZERO_BYTES32,
           data: encodedData,
-          //   value: BigInt(0),
-          //   deadline: BigInt(1714655138),
           nonce: await eas.getNonce(signer.address),
         },
         signer
       );
 
-      console.log("delegatedAttestation", delegatedAttestation);
+      console.log("delegatedAttestation: ", delegatedAttestation);
       console.log("verifying...");
       const verify = await delegated.verifyDelegatedAttestationSignature(
         await signer.getAddress(),
         delegatedAttestation
       );
-      console.log("verify obj", verify);
-      console.log("wallet.address", signerUser.address);
+      console.log("verify obj: ", verify);
 
       const tx = await eas.connect(signerUser).attestByDelegation({
         schema: schemaUID,
@@ -287,14 +283,12 @@ app.post("/delegateAttestationOnchain", async (req, res) => {
           revocable: delegatedAttestation.message.revocable,
           refUID: delegatedAttestation.message.refUID,
           data: encodedData,
-          //   value: delegatedAttestation.message.value,
         },
         signature: delegatedAttestation.signature,
         attester: signer.address,
-        // deadline: BigInt(1714655138),
       });
       const newAttestationUID = await tx.wait();
-      console.log("New attestation UID:", newAttestationUID);
+      console.log("New attestation UID: ", newAttestationUID);
       res.json({ success: true, newAttestationUID });
     } catch (error) {
       res.status(500).json({ success: false, error: error.message });
@@ -306,18 +300,20 @@ app.post("/delegateAttestationOnchain", async (req, res) => {
 });
 
 app.post("/registerSchema", async (req, res) => {
+  const { schemaRegistryContractAddress, resolverAddress } = req.body;
+
   const eas = new EAS(EASContractAddress);
   eas.connect(signer);
   try {
-    const schemaRegistryContractAddress =
-      "0x4200000000000000000000000000000000000020";
     const schemaRegistry = new SchemaRegistry(schemaRegistryContractAddress);
     schemaRegistry.connect(signer);
 
     const schema =
       "bytes32 meetingId, uint8 meetingType, uint32 startTime, uint32 endTime";
-    const resolverAddress = "0x0000000000000000000000000000000000000000";
-    const revocable = false;
+
+    // pass this if you don't want to add customResolverAddress
+    // const resolverAddress = "0x0000000000000000000000000000000000000000";
+    const revocable = true;
 
     const transaction = await schemaRegistry.register({
       schema,
@@ -326,7 +322,6 @@ app.post("/registerSchema", async (req, res) => {
     });
     // console.log(transaction);
 
-    // Optional: Wait for transaction to be validated
     const hash = await transaction.wait();
     console.log("the schema UID", hash);
 
@@ -372,7 +367,7 @@ app.post("/directCall", async (req, res) => {
     { name: "EndTime", value: endTime, type: "uint32" },
   ]);
   const schemaUID =
-    "0x05c93054d8326438fe4f859f9382540f37677a5c87020037b9ec9554b3daff0f";
+    "0x98a9530fb8d7039c36f78e857b55f1c0e2d4caafa00d05dec37f4abef3e301b2";
 
   //data   ----END
 
@@ -407,27 +402,6 @@ app.post("/directCall", async (req, res) => {
     signer
   );
   console.log("signed Object:", delegatedAttestation);
-  /* const tupleObject = {
-    schema:
-      "0x05c93054d8326438fe4f859f9382540f37677a5c87020037b9ec9554b3daff0f",
-    data: {
-      recipient: "0x97861976283e6901b407D1e217B72c4007D9F64D",
-      data: "0x7465732d747365662d6768000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000030390000000000000000000000000000000000000000000000000000000000003039",
-      expirationTime: 0n,
-      revocable: false,
-      refUID:
-        "0x0000000000000000000000000000000000000000000000000000000000000000",
-      value: 0n,
-      nonce: await eas.getNonce("0x8dEa0ad941d577e356745d758b30Fa11EFa28E80"),
-    },
-    signature: {
-      v: 27,
-      r: "0xbda8d6621ef8bfc7448b6a807f4c8bc3898ee65cd2d206a5576398d072701f97",
-      s: "0x62f4e3e0737933d79ab3b7a087ef67316f4f46343937efdab323863f7d443d5a",
-    },
-    attester: "0x8dEa0ad941d577e356745d758b30Fa11EFa28E80",
-    deadline: NO_EXPIRATION,
-  }; */
 
   const tupleObject = {
     schema: delegatedAttestation.message.schema,
@@ -438,6 +412,7 @@ app.post("/directCall", async (req, res) => {
       revocable: delegatedAttestation.message.revocable,
       refUID: delegatedAttestation.message.refUID,
       value: 0n,
+      nonce: delegatedAttestation.message.nonce,
     },
     signature: {
       v: delegatedAttestation.signature.v,
@@ -457,6 +432,21 @@ app.post("/directCall", async (req, res) => {
   console.log(tx);
   console.log("transaction sent successfully...");
   res.json({ success: true, tx });
+});
+
+app.post("/changeTargetAttester", async (req, res) => {
+  const { newTargetAttester } = req.body;
+  const signerUser = new ethers.Wallet(process.env.USER_PVT_KEY, provider);
+
+  console.log(newTargetAttester);
+  const contract = new ethers.Contract(
+    "0x8beE4e979b31a52ad82dec1B089c14541056b0A5",
+    resolver_abi,
+    signerUser
+  );
+  const txChangeOwner = await contract.updateTargetAttester(newTargetAttester);
+
+  res.json({ success: true, txHash: txChangeOwner.hash });
 });
 
 // Start the server
