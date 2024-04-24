@@ -86,7 +86,7 @@ app.post("/attestOffchain", async (req, res) => {
         // schema:
         //   "0xfabbfe80a9120eb3d709b8f72a6cc186ad1da170e19660c1c22f695f2f5c7eee",
         schema:
-          "0x0208c82b51526b639b4d7e3334fd476d7f9a21e02e8c121ef4eb681429119a1d",
+          "0x98a9530fb8d7039c36f78e857b55f1c0e2d4caafa00d05dec37f4abef3e301b2",
         recipient: recipient,
         time: currentTime,
         expirationTime: expirationTime,
