@@ -29,10 +29,11 @@ const provider = new ethers.JsonRpcProvider(url, undefined, {
 });
 const privateKey = process.env.PVT_KEY;
 const signer = new ethers.Wallet(privateKey, provider);
-// const signer = new ethers.Wallet(privateKey, provider);
+
 const EASContractAddress = "0x4200000000000000000000000000000000000021";
-// const eas = new EAS(EASContractAddress);
-// eas.connect(signer);
+
+const schemaUID =
+  "0xf9e214a80b66125cad64453abe4cef5263be3a7f01760d0cc72789236fca2b5d";
 
 BigInt.prototype.toJSON = function () {
   return this.toString();
@@ -83,10 +84,7 @@ app.post("/attestOffchain", async (req, res) => {
 
     const offchainAttestation = await offchain.signOffchainAttestation(
       {
-        // schema:
-        //   "0xfabbfe80a9120eb3d709b8f72a6cc186ad1da170e19660c1c22f695f2f5c7eee",
-        schema:
-          "0x98a9530fb8d7039c36f78e857b55f1c0e2d4caafa00d05dec37f4abef3e301b2",
+        schema: schemaUID,
         recipient: recipient,
         time: currentTime,
         expirationTime: expirationTime,
@@ -103,7 +101,7 @@ app.post("/attestOffchain", async (req, res) => {
       signer: await signer.getAddress(),
     };
 
-    const baseUrl = "https://optimism-sepolia.easscan.org";
+    const baseUrl = "https://optimism.easscan.org/";
     const url = baseUrl + createOffchainURL(pkg);
 
     const data = {
@@ -167,13 +165,6 @@ app.post("/attestOnchain", async (req, res) => {
       { name: "EndTime", value: endTime, type: "uint32" },
     ]);
 
-    // console.log(encodedData);
-
-    const schemaUID =
-      "0x0208c82b51526b639b4d7e3334fd476d7f9a21e02e8c121ef4eb681429119a1d";
-    // const schemaUID =
-    //   "0x0208c82b51526b639b4d7e3334fd476d7f9a21e02e8c121ef4eb681429119a1d";
-
     const tx = await eas.attest({
       schema: schemaUID,
       data: {
@@ -182,12 +173,13 @@ app.post("/attestOnchain", async (req, res) => {
         revocable: false,
         data: encodedData,
       },
-      gasLimit: 300000,
+      gasPrice: 1000000,
+      //   gasLimit: 300000,
     });
 
     const newAttestationUID = await tx.wait();
 
-    console.log("New attestation UID:", newAttestationUID);
+    console.log("New attestation UID: ", newAttestationUID);
 
     res.json({ success: true, newAttestationUID });
   } catch (error) {
@@ -230,14 +222,10 @@ app.post("/delegateAttestationOnchain", async (req, res) => {
       { name: "StartTime", value: startTime, type: "uint32" },
       { name: "EndTime", value: endTime, type: "uint32" },
     ]);
-    const schemaUID =
-      "0x98a9530fb8d7039c36f78e857b55f1c0e2d4caafa00d05dec37f4abef3e301b2";
 
     try {
       const eas = new EAS(EASContractAddress);
       const signerUser = new ethers.Wallet(process.env.USER_PVT_KEY, provider);
-      console.log("thesigner user", signerUser);
-      console.log("thesigner admin: ", signer);
 
       eas.connect(signer);
       console.log("connected");
@@ -313,12 +301,13 @@ app.post("/registerSchema", async (req, res) => {
 
     // pass this if you don't want to add customResolverAddress
     // const resolverAddress = "0x0000000000000000000000000000000000000000";
-    const revocable = true;
+    const revocable = false;
 
     const transaction = await schemaRegistry.register({
       schema,
       resolverAddress,
       revocable,
+      gasPrice: 1000000,
     });
     // console.log(transaction);
 
@@ -366,8 +355,6 @@ app.post("/directCall", async (req, res) => {
     { name: "StartTime", value: startTime, type: "uint32" },
     { name: "EndTime", value: endTime, type: "uint32" },
   ]);
-  const schemaUID =
-    "0x98a9530fb8d7039c36f78e857b55f1c0e2d4caafa00d05dec37f4abef3e301b2";
 
   //data   ----END
 
@@ -419,7 +406,7 @@ app.post("/directCall", async (req, res) => {
       r: delegatedAttestation.signature.r,
       s: delegatedAttestation.signature.s,
     },
-    attester: "0x8dEa0ad941d577e356745d758b30Fa11EFa28E80",
+    attester: signer.address,
     deadline: 0n,
   };
   console.log("the tuple:", tupleObject);
@@ -447,6 +434,39 @@ app.post("/changeTargetAttester", async (req, res) => {
   const txChangeOwner = await contract.updateTargetAttester(newTargetAttester);
 
   res.json({ success: true, txHash: txChangeOwner.hash });
+});
+
+app.post("/revokeOffchain", async (req, res) => {
+  const { UID } = req.body;
+  const eas = new EAS(EASContractAddress);
+  eas.connect(signer);
+
+  const data = ethers.encodeBytes32String(
+    "0xbed159b097d9b267ea7acae8e8d9c66b642d89eacb59c2cb8bbc3445e8edd54d"
+  );
+  console.log(data);
+
+  const transaction = await eas.revokeOffchain(data);
+  console.log(transaction);
+
+  await transaction.wait();
+  res.json({ success: true, txHash: transaction });
+});
+app.post("/revokeOnchain", async (req, res) => {
+  const { UID } = req.body;
+  const eas = new EAS(EASContractAddress);
+  eas.connect(signer);
+
+  const transaction = await eas.revoke({
+    schema: schemaUID,
+    data: {
+      uid: UID,
+    },
+  });
+
+  // Optional: Wait for transaction to be validated
+  await transaction.wait();
+  res.json({ success: true, txHash: transaction });
 });
 
 // Start the server
