@@ -30,7 +30,8 @@ const provider = new ethers.JsonRpcProvider(url, undefined, {
 const privateKey = process.env.PVT_KEY;
 const signer = new ethers.Wallet(privateKey, provider);
 
-const EASContractAddress = "0x4200000000000000000000000000000000000021";
+// const EASContractAddress = "0x4200000000000000000000000000000000000021";
+const EASContractAddress = "0xbD75f629A22Dc1ceD33dDA0b68c546A1c035c458";
 
 const schemaUID =
   "0xf9e214a80b66125cad64453abe4cef5263be3a7f01760d0cc72789236fca2b5d";
@@ -101,7 +102,9 @@ app.post("/attestOffchain", async (req, res) => {
       signer: await signer.getAddress(),
     };
 
-    const baseUrl = "https://optimism.easscan.org/";
+    const baseUrl = "https://optimism.easscan.org";
+    // const baseUrl = "https://arbitrum.easscan.org";
+
     const url = baseUrl + createOffchainURL(pkg);
 
     const data = {
@@ -111,7 +114,9 @@ app.post("/attestOffchain", async (req, res) => {
 
     let uploadstatus;
     try {
-      response = await axios.post(`${baseUrl}/offchain/store`, data);
+      response = await axios.post(`${baseUrl}/offchain/store`, data, {
+        timeout: 1000000,
+      });
       if (response.data) {
         uploadstatus = true;
       }
@@ -232,7 +237,7 @@ app.post("/delegateAttestationOnchain", async (req, res) => {
       //   Use this delegated if you want to go manual
       //   const delegated = new Delegated({
       //     address: EASContractAddress,
-      //     chainId: BigInt(11155420),
+      //     chainId: BigInt(42161),
       //     version: "1.0.2",
       //   });
       const delegated = await eas.getDelegated();
