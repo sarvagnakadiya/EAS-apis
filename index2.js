@@ -30,11 +30,11 @@ const provider = new ethers.JsonRpcProvider(url, undefined, {
 const privateKey = process.env.PVT_KEY;
 const signer = new ethers.Wallet(privateKey, provider);
 
-// const EASContractAddress = "0x4200000000000000000000000000000000000021";
-const EASContractAddress = "0xbD75f629A22Dc1ceD33dDA0b68c546A1c035c458";
+const EASContractAddress = "0x4200000000000000000000000000000000000021";
+// const EASContractAddress = "0xbD75f629A22Dc1ceD33dDA0b68c546A1c035c458";
 
 const schemaUID =
-  "0xf9e214a80b66125cad64453abe4cef5263be3a7f01760d0cc72789236fca2b5d";
+  "0xbaeab565ea1cf3cd3808b75fef04b811606b2c0d6f57a39c6abb60ee642fdcc0";
 
 BigInt.prototype.toJSON = function () {
   return this.toString();
@@ -102,7 +102,8 @@ app.post("/attestOffchain", async (req, res) => {
       signer: await signer.getAddress(),
     };
 
-    const baseUrl = "https://optimism.easscan.org";
+    const baseUrl = "https://optimism-sepolia.easscan.org";
+    // const baseUrl = "https://optimism.easscan.org";
     // const baseUrl = "https://arbitrum.easscan.org";
 
     const url = baseUrl + createOffchainURL(pkg);
@@ -284,6 +285,7 @@ app.post("/delegateAttestationOnchain", async (req, res) => {
       console.log("New attestation UID: ", newAttestationUID);
       res.json({ success: true, newAttestationUID });
     } catch (error) {
+      console.log(error);
       res.status(500).json({ success: false, error: error.message });
     }
   } catch (error) {
@@ -314,7 +316,7 @@ app.post("/registerSchema", async (req, res) => {
       revocable,
       gasPrice: 1000000,
     });
-    // console.log(transaction);
+    console.log(transaction);
 
     const hash = await transaction.wait();
     console.log("the schema UID", hash);
